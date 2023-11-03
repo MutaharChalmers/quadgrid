@@ -11,7 +11,7 @@ import pandas as pd
 import geopandas as gpd
 import shapely as shp
 import shapely.vectorized as shpv
-from .convert import lls2qids
+from .qtree import lls2qids
 from .distance import dmat
 
 
@@ -20,19 +20,37 @@ R = 6371.007
 
 
 class QuadGrid():
-    def __init__(self, res, lon_from=-180, lon_to=180, lat_from=-90, lat_to=90):
+    def __init__(self, res, lon_bounds=(-180,180), lat_bounds=(-90,90)):
+        """Converts a single (lon, lat) quadcell centroid to qid.
+
+        Parameters
+        ----------
+            res : float
+                Quadgrid resolution in decimal degrees.
+            lon_bounds : (float, float)
+                Longitude bounds to be covered by quadgrid.
+            lat_bounds : (float, float)
+                Latitude bounds to be covered by quadgrid.
+        """
         self.res = res
-        self.lon_from = lon_from
-        self.lon_to = lon_to
-        self.lat_from = lat_from
-        self.lat_to = lat_to
-        self.lons_1d = np.arange(lon_from+res/2, lon_to+res/2, res)
-        self.lats_1d = np.arange(lat_from+res/2, lat_to+res/2, res)
+        self.lon_bounds = lon_bounds
+        self.lat_bounds = lat_bounds
+
+        # Global centroid lons and lats
+        lons_1d = np.arange(-180+res/2, 180+res/2, res)
+        lats_1d = np.arange(-90+res/2, 90+res/2, res)
+
+        # Apply bounds
+        self.lons_1d = lons_1d[(lons_1d>(lon_bounds[0]-res/2)) &
+                               (lons_1d<(lon_bounds[1]+res/2))]
+        self.lats_1d = lats_1d[(lats_1d>(lat_bounds[0]-res/2)) &
+                               (lats_1d<(lat_bounds[1]+res/2))]
         lons_2d, lats_2d = np.meshgrid(self.lons_1d, self.lats_1d, indexing='xy')
         self.lons, self.lats = lons_2d.ravel(), lats_2d.ravel()
+
+        # Generate qids, initial mask and MultiIndex
         self.qids = lls2qids(self.lons, self.lats, res)
         self.mask = np.full(self.qids.shape, True, dtype=bool)
-        self.dmat = None
         self.mix = pd.MultiIndex.from_arrays([self.lats, self.lons], 
                                              names=['lat','lon'])
         
@@ -44,9 +62,9 @@ class QuadGrid():
         self.areas = np.repeat(areas, self.lons_1d.size)
         
     def __repr__(self):
-        return f'QuadGrid ({self.res}) ' \
-               f'{self.lon_from}<=lon<={self.lon_to} | ' \
-               f'{self.lat_from}<=lat<={self.lat_to}'
+        return f'QuadGrid {self.res} deg | ' \
+               f'{self.lon_bounds[0]}<=lon<={self.lon_bounds[1]} | ' \
+               f'{self.lat_bounds[0]}<=lat<={self.lat_bounds[1]}'
         
     def apply_mask(self, geom, buff=None):
         """Generate boolean mask for all quadcells within geom."""
@@ -80,6 +98,6 @@ class QuadGrid():
     
     def to_xarray(self):
         """Convert to xarray Dataset."""
-        attrs = {'Type': 'quadgrid', 'Resolution': self.res, 'Area units': 'km2'}
+        attrs = {'Type': 'quadgrid', 'Resolution': f'{self.res} deg', 'Area units': 'km2'}
         ds = self.to_pandas().to_xarray().reindex(lon=self.lons_1d, lat=self.lats_1d)
         return ds.assign_attrs(**attrs)

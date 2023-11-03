@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quadgrid"
-version = "0.1.0"
+version = "0.1.1"
 description = "Quadtree grid generator"
 authors = [
            { name = "Mutahar Chalmers", email = "mut.chalmers@gmail.com" },
