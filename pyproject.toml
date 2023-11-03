@@ -4,10 +4,10 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quadgrid"
-version = "0.1.1"
+version = "0.1.2"
 description = "Quadtree grid generator"
 authors = [
-           { name = "Mutahar Chalmers", email = "mut.chalmers@gmail.com" },
+           { name = "Mutahar Chalmers", email = "mutahar.chalmers@gmail.com" },
 ]
 license = { file = "LICENSE" }
 readme = "README.md"
