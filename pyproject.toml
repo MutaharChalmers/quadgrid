@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quadgrid"
+version = "0.1.0"
+description = "Quadtree grid generator"
+authors = [
+           { name = "Mutahar Chalmers", email = "mut.chalmers@gmail.com" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+requires-python = ">=3.8"
+dependencies = [
+  "numpy>=1.18", "pandas>=1.1", "geopandas>=0.13", 
+  "shapely>=1.7.1", "xarray>=0.21.1"
+]
+
+[project.urls]
+"Homepage" = ""
+"Bug Tracker" = ""
