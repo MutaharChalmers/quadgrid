@@ -21,7 +21,7 @@ R = 6371.007
 
 class QuadGrid():
     def __init__(self, res, lon_bounds=(-180,180), lat_bounds=(-90,90)):
-        """Converts a single (lon, lat) quadcell centroid to qid.
+        """Class constructor for QuadGrid.
 
         Parameters
         ----------
@@ -37,8 +37,10 @@ class QuadGrid():
         self.lat_bounds = lat_bounds
 
         # Global centroid lons and lats
-        lons_1d = np.arange(-180+res/2, 180+res/2, res)
-        lats_1d = np.arange(-90+res/2, 90+res/2, res)
+        lons_1d = np.arange(res/2, 180+res/2, res)
+        lons_1d = np.sort(np.r_[-lons_1d, lons_1d])
+        lats_1d = np.arange(res/2, 90+res/2, res)
+        lats_1d = np.sort(np.r_[-lats_1d, lats_1d])
 
         # Apply bounds
         self.lons_1d = lons_1d[(lons_1d>(lon_bounds[0]-res/2)) &
