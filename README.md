@@ -23,6 +23,9 @@ quadtreeIDs (qids). In the simplified example below, the red point is in top-lev
 ![image.png](README_files/1bd03ad7-9b47-4b9b-b497-5a05cf2ba6cd.png)
 
 ## Versions
+`0.1.4` Fixed bug in quadgrids defined at a resolution coarser than 1 degree
+`0.1.3` Added resolution to DataFrame conversions; apply_mask can accept GeoDataFrames
 `0.1.2` Changed email address in pyproject.toml
 `0.1.1` Bug fix to ensure user-specified bounded grid is consistent with the global grid
 `0.1.0` First release
+
