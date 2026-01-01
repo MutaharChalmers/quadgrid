@@ -1,222 +1,249 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Functions to convert between quadcell centroid (lon, lat) coordinates and
-quadtreeIDs (qids). Coordinates must be in decimal degrees, and longitudes
-must be defined from -180 to 180 degrees.
+Class with associated functions to convert between quadcell centroid (lon, lat)
+coordinates and quadtreeIDs (qids). Coordinates must be in decimal degrees, and
+longitudes must be defined from -180 to 180 degrees. Objects have four methods:
 
     ll2qid - converts a single (lon, lat) pair to qid
     qid2ll - converts a single qid to a (lon, lat) pair
     lls2qids - converts numpy arrays of lons and lats to an array of qids
     qids2lls - converts a numpy array of qids to arrays of lons and lats
-    
-The functions all start by classifying a (lon, lat) point into one of the 
-main quadrants on the Earth's surface. The origin (initially {0,0}) is then 
-moved to the centre of that quadrant ({res/2, res/2} in quadrant coordinates),
-new child quadrants are defined, and the point is classified into one of the
-child quadrants. The process continues recursively until the target resolution
-is reached. The initial resolution is chosen such that it is:
-  (a) larger by a factor of a power of 2 than the grid resolution
-  (b) >=180 degrees
+
+From v0.2.0, robust to edge-case floating point round-off errors by working
+in milliarcseconds. Pre-v0.2.0 functions are still available in the package
+namespace, but it is recommended to use the QTree class in future.
 """
 
 import numpy as np
 
 
-def ll2qid(lon, lat, res_target, verbose=False):
-    """Converts a single (lon, lat) quadcell centroid to qid.
+class QTree():
+    def __init__(self, res, mas=False):
+        """Create QTree object for geospatial analysis.
 
-    Parameters
-    ----------
+        Parameters
+        ----------
+        res : float
+            Target resolution in decimal degrees.
+        """
+
+        self.res = res
+        self.mas = mas
+        self.mas_per_degree = 3_600_000
+        self.res_mas = int(res * self.mas_per_degree)
+
+        # Determine number of levels given target resolution
+        self.i_max = int(np.ceil(np.log2(180/self.res)))
+
+    def __repr__(self):
+        mas_str = '' if not self.mas else '[mas]'
+        return f'QuadTree({self.res}°{mas_str})'
+
+    def ll2qid(self, lon, lat, verbose=False):
+        """Converts a lon and lat pair to a qid.
+
+        Parameters
+        ----------
         lon : float
-            Quadcell centroid longitude in decimal degrees.
+            Longitude in decimal degrees or milliarcseconds.
         lat : float
-            Quadcell centroid latitude in decimal degrees.
-        res_target : float
-            Target resolution.
+            Latitude in decimal degrees or milliarcseconds.
+        verbose : bool, optional
+            Output extra information about the cell centroid.
 
-    Returns
-    -------
+        Returns
+        -------
         qid : int
-            Quadcell qid.
-    """
+            Quadcell id.
+        """
 
-    # Determine resolution of top-level quadrants, given target resolution
-    i_max = int(np.ceil(np.log2(180/res_target)))
-    res = res_target * 2**i_max
-
-    i, qid, origin_lon, origin_lat = 0, 0, 0, 0
-    while res >= res_target:
-        delta = 4**(i_max-i)
-        if lon >= origin_lon and lat >= origin_lat:
-            # Do nothing to the qid
-            origin_lon, origin_lat = (origin_lon+res/2, origin_lat+res/2)
-        elif lon < origin_lon and lat >= origin_lat:
-            qid = qid + delta
-            origin_lon, origin_lat = (origin_lon-res/2, origin_lat+res/2)
-        elif lon < origin_lon and lat < origin_lat:
-            qid = qid + 2*delta
-            origin_lon, origin_lat = (origin_lon-res/2, origin_lat-res/2)
-        elif lon >= origin_lon and lat < origin_lat:
-            qid = qid + 3*delta
-            origin_lon, origin_lat = (origin_lon+res/2, origin_lat-res/2)
+        # Discretise lon and lat to integer number of cell widths
+        if not self.mas:
+            lon_int = int(np.ceil(lon/self.res))
+            lat_int = int(np.ceil(lat/self.res))
+            shift = 1 << self.i_max
+        # Ensure lon and lat in milliarcseconds are integers
         else:
-            print(f'Error:\n lon: {lon}\n lat: {lat}')
-            return None
+            lon_int = int(lon)
+            lat_int = int(lat)
+            shift = self.res_mas << self.i_max
 
-        # Halve the resolution and update counter
-        res /= 2
-        i += 1
+        # Initialise origin and qid
+        origin_lon_int, origin_lat_int, qid = 0, 0, 0
 
-    if verbose:
-        print(f'({lon}, {lat}) -> {qid}')
-        print(f'Resolution={2*res} | centroid=({origin_lon}, {origin_lat})')
-    return qid
+        for i in range(self.i_max+1):
+            delta = 4**(self.i_max-i)
+            shift >>= 1
+            right = lon_int > origin_lon_int
+            top = lat_int > origin_lat_int
+            if top and right:
+                # Do nothing to the qid
+                origin_lon_int += shift
+                origin_lat_int += shift
+            elif top and not right:
+                qid += delta
+                origin_lon_int -= shift
+                origin_lat_int += shift
+            elif not top and not right:
+                qid += 2*delta
+                origin_lon_int -= shift
+                origin_lat_int -= shift
+            else:
+                qid += 3*delta
+                origin_lon_int += shift
+                origin_lat_int -= shift
 
+        if verbose:
+            if self.mas:
+                print(f'({lon/self.mas_per_degree}, {lat/self.mas_per_degree}) -> {qid}')
+                centroid_lon = origin_lon_int/self.mas_per_degree
+                centroid_lat = origin_lat_int/self.mas_per_degree
+            else:
+                print(f'({lon}, {lat}) -> {qid}')
+                dlon = self.res/2 if lon_int > origin_lon_int else -self.res/2
+                dlat = self.res/2 if lat_int > origin_lat_int else -self.res/2
+                centroid_lon = origin_lon_int * self.res + dlon
+                centroid_lat = origin_lat_int * self.res + dlat
+            print(f'Centroid=({centroid_lon}, {centroid_lat})')
+        return qid
 
-def qid2ll(qid, res_target, verbose=False):
-    """Converts a single qid to the (lon, lat) of the centroid of the quadcell.
+    def qid2ll(self, qid):
+        """Converts a single qid to quadcell centroid lon and lat.
 
-    Parameters
-    ----------
+        Parameters
+        ----------
         qid : int
             Quadcell qid.
-        res_target : float
-            Target resolution.
 
-    Returns
-    -------
+        Returns
+        -------
         lon : float
             Quadcell centroid longitude in decimal degrees.
         lat : float
             Quadcell centroid latitude in decimal degrees.
+        """
 
-    """
+        # Initialise integer lon, lat and shift variables
+        lon_int, lat_int, shift = 0, 0, 1
 
-    qid0, lon, lat, delta = qid*1, 0, 0, res_target/2
+        for i in range(self.i_max+1):
+            qid, mod = divmod(qid, 4)
+            if mod == 0:
+                lon_int += shift
+                lat_int += shift
+            elif mod == 1:
+                lon_int -= shift
+                lat_int += shift
+            elif mod == 2:
+                lon_int -= shift
+                lat_int -= shift
+            else:
+                lon_int += shift
+                lat_int -= shift
+            shift <<= 1
 
-    while delta <= 180:
-        qid, mod = divmod(qid, 4)
-        if mod == 0:
-            lon += delta
-            lat += delta
-        elif mod == 1:
-            lon -= delta
-            lat += delta
-        elif mod == 2:
-            lon -= delta
-            lat -= delta
-        elif mod == 3:
-            lon += delta
-            lat -= delta
-        delta *= 2
+        lon = lon_int * self.res/2
+        lat = lat_int * self.res/2
+        return lon, lat
 
-    if verbose:
-        print(f'{qid0} -> ({lon}, {lat})')
-        print(f'Resolution={res_target}')
-    return lon, lat
+    def lls2qids(self, lons, lats):
+        """Converts arrays of lons and lats to an array of qids.
 
-
-def lls2qids(lons, lats, res_target):
-    """Converts arrays of (lon, lat) quadcell centroids to qids.
-
-    Parameters
-    ----------
+        Parameters
+        ----------
         lons : ndarray
-            1d ndarray of quadcell centroid longitudes in decimal degrees.
+            Array of longitudes in decimal degrees or milliarcseconds.
         lats : ndarray
-            1d ndarray of quadcell centroid latitudes in decimal degrees.
-        res_target : float or int
-            Target resolution.
+            Array of latitudes in decimal degrees or milliarcseconds.
 
-    Returns
-    -------
+        Returns
+        -------
         qids : ndarray
-            1d ndarray of qids.
-    """
+            Array of qids.
+        """
 
-    # Determine resolution of top-level quadrants, given target resolution
-    i_max = int(np.ceil(np.log2(180/res_target)))
-    res = res_target * 2**i_max
+        # Discretise lons and lats to integer numbers of cell widths
+        if not self.mas:
+            lons_int = np.ceil(lons/self.res).astype(np.int64)
+            lats_int = np.ceil(lats/self.res).astype(np.int64)
+            shift = 1 << self.i_max
+        # Ensure lons and lats in milliarcseconds are integers
+        else:
+            lons_int = lons.astype(np.int64)
+            lats_int = lats.astype(np.int64)
+            shift = self.res_mas << self.i_max
 
-    i = 0
-    qids = np.zeros_like(lons, dtype=np.int64)
-    origin_lons = np.zeros_like(lons)
-    origin_lats = np.zeros_like(lats)
+        # Initialise qid array, origins and shift
+        qids = np.zeros_like(lons, dtype=np.int64)
+        origin_lons_int = np.zeros_like(lons, dtype=np.int64)
+        origin_lats_int = np.zeros_like(lats, dtype=np.int64)
 
-    while res >= res_target:
-        delta = 4**(i_max-i)
+        for i in range(self.i_max+1):
+            delta = 4**(self.i_max-i)
+            shift >>= 1
+            right = lons_int > origin_lons_int
+            top = lats_int > origin_lats_int
 
-        # Define disjoint masks by quadrant for all points in the arrays
-        mask0 = (lons >= origin_lons) & (lats >= origin_lats)
-        mask1 = (lons < origin_lons) & (lats >= origin_lats)
-        mask2 = (lons < origin_lons) & (lats < origin_lats)
-        mask3 = (lons >= origin_lons) & (lats < origin_lats)
+            # Define disjoint masks by quadrant for all points in the arrays
+            mask0 = top & right
+            mask1 = top & ~right
+            mask2 = ~top & ~right
+            mask3 = ~top & right
 
-        # Shift origins by quadrant
-        # Do nothing to the qids for mask0
-        origin_lons[mask0] = origin_lons[mask0] + res/2
-        origin_lats[mask0] = origin_lats[mask0] + res/2
+            # Shift origins by quadrant
+            # Do nothing to the qids for mask0
+            origin_lons_int[mask0] += shift
+            origin_lats_int[mask0] += shift
+            qids[mask1] = qids[mask1] + delta
+            origin_lons_int[mask1] -= shift
+            origin_lats_int[mask1] += shift
+            qids[mask2] = qids[mask2] + 2*delta
+            origin_lons_int[mask2] -= shift
+            origin_lats_int[mask2] -= shift
+            qids[mask3] = qids[mask3] + 3*delta
+            origin_lons_int[mask3] += shift
+            origin_lats_int[mask3] -= shift
 
-        qids[mask1] = qids[mask1] + delta
-        origin_lons[mask1] = origin_lons[mask1] - res/2
-        origin_lats[mask1] = origin_lats[mask1] + res/2
+        return qids
 
-        qids[mask2] = qids[mask2] + 2*delta
-        origin_lons[mask2] = origin_lons[mask2] - res/2
-        origin_lats[mask2] = origin_lats[mask2] - res/2
+    def qids2lls(self, qids):
+        """Converts array of qids to arrays of quadcell centroids lons and lats.
 
-        qids[mask3] = qids[mask3] + 3*delta
-        origin_lons[mask3] = origin_lons[mask3] + res/2
-        origin_lats[mask3] = origin_lats[mask3] - res/2
-
-        # Halve the resolution and update counter
-        res /= 2
-        i += 1
-
-    return qids
- 
-
-def qids2lls(qids, res_target):
-    """Converts arrays of qids to (lon, lat) arrays of quadcell centroids.
-
-    Parameters
-    ----------
+        Parameters
+        ----------
         qids : ndarray
-            1d ndarray of qids.
-        res_target : float or int
-            Target resolution.
+            Array of qids.
 
-    Returns
-    -------
+        Returns
+        -------
         lons : ndarray
-            1d ndarray of quadcell centroid longitudes in decimal degrees.
+            Array of quadcell centroid longitudes in decimal degrees.
         lats : ndarray
-            1d ndarray of quadcell centroid latitudes in decimal degrees.
-    """
+            Array of quadcell centroid latitudes in decimal degrees.
+        """
 
-    qids0 = qids*1
-    lons = np.zeros_like(qids, dtype=np.float64)
-    lats = np.zeros_like(qids, dtype=np.float64)
-    delta = res_target/2
+        # Initialise integer lon and lat arrays
+        lons_int = np.zeros_like(qids, dtype=np.int64)
+        lats_int = np.zeros_like(qids, dtype=np.int64)
+        shift = 1
 
-    while delta <= 180:
-        qids, mods = np.divmod(qids, 4)
+        for i in range(self.i_max+1):
+            qids, mods = np.divmod(qids, 4)
+            mask0 = mods == 0
+            mask1 = mods == 1
+            mask2 = mods == 2
+            mask3 = mods == 3
+            lons_int[mask0] += shift
+            lats_int[mask0] += shift
+            lons_int[mask1] -= shift
+            lats_int[mask1] += shift
+            lons_int[mask2] -= shift
+            lats_int[mask2] -= shift
+            lons_int[mask3] += shift
+            lats_int[mask3] -= shift
+            shift <<= 1
 
-        mask0 = mods == 0
-        mask1 = mods == 1
-        mask2 = mods == 2
-        mask3 = mods == 3
-
-        lons[mask0] += delta
-        lats[mask0] += delta
-        lons[mask1] -= delta
-        lats[mask1] += delta
-        lons[mask2] -= delta
-        lats[mask2] -= delta
-        lons[mask3] += delta
-        lats[mask3] -= delta
-
-        delta *= 2
-
-    return lons, lats
+        lons = lons_int * self.res/2
+        lats = lats_int * self.res/2
+        return lons, lats

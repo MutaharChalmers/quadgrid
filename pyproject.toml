@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quadgrid"
-version = "0.1.4"
+version = "0.2.0"
 description = "Quadtree grid generator"
 authors = [
            { name = "Mutahar Chalmers", email = "mutahar.chalmers@gmail.com" },
@@ -19,11 +19,11 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: GIS",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
-  "numpy>=1.18", "pandas>=1.1", "geopandas>=0.13",
-  "shapely>=1.7.1", "xarray>=0.21.1"
+  "numpy>=1.26.4", "pandas>=2.0", "geopandas>=1.0.0",
+  "shapely>=2.0.0", "xarray>=2024.1.0"
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/FuzzyDuck79/quadgrid"
+"Homepage" = "https://github.com/MutaharChalmers/quadgrid"
