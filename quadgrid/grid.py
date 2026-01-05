@@ -55,7 +55,7 @@ class QuadGrid():
         _lons_2d, _lats_2d = np.meshgrid(self._lons, self._lats, indexing='xy')
         self._lons_2d, self._lats_2d = _lons_2d.ravel(), _lats_2d.ravel()
 
-        # Create object attributes for convenience
+        # Create object attributes in decimal degrees for convenience
         self.lons = self._lons / self.mas_per_degree
         self.lats = self._lats / self.mas_per_degree
         self.lons_2d = self._lons_2d / self.mas_per_degree
@@ -63,7 +63,7 @@ class QuadGrid():
 
         # Generate qids, initial mask and MultiIndex
         self.qt = QTree(res, mas=True)
-        self.qids = self.qt.lls2qids(self._lons_2d, self._lats_2d)
+        self.qids = self.qt.lls2qids(self.lons_2d, self.lats_2d)
         self.base_mask = np.full(self.qids.shape, True, dtype=bool)
         self.mix = pd.MultiIndex.from_arrays([self.lats_2d, self.lons_2d],
                                              names=['lat','lon'])
@@ -118,9 +118,7 @@ class QuadGrid():
 
     def query(self, lons, lats):
         """QuadcellID lookup."""
-        lons_mas = (np.atleast_1d(lons) * self.mas_per_degree).astype(np.int64)
-        lats_mas = (np.atleast_1d(lats) * self.mas_per_degree).astype(np.int64)
-        return self.qt.lls2qids(lons_mas, lats_mas)
+        return self.qt.lls2qids(np.atleast_1d(lons), np.atleast_1d(lats))
 
     def distance(self, lon, lat):
         """Distance matrix in km between a single point and all quadcells."""

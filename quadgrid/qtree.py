@@ -46,9 +46,9 @@ class QTree():
         Parameters
         ----------
         lon : float
-            Longitude in decimal degrees or milliarcseconds.
+            Longitude in decimal degrees.
         lat : float
-            Latitude in decimal degrees or milliarcseconds.
+            Latitude in decimal degrees.
         verbose : bool, optional
             Output extra information about the cell centroid.
 
@@ -63,10 +63,10 @@ class QTree():
             lon_int = int(np.ceil(lon/self.res))
             lat_int = int(np.ceil(lat/self.res))
             shift = 1 << self.i_max
-        # Ensure lon and lat in milliarcseconds are integers
+        # Convert lon and lat to milliarcseconds
         else:
-            lon_int = int(lon)
-            lat_int = int(lat)
+            lon_int = int(np.round(lon*self.mas_per_degree))
+            lat_int = int(np.round(lat*self.mas_per_degree))
             shift = self.res_mas << self.i_max
 
         # Initialise origin and qid
@@ -96,7 +96,7 @@ class QTree():
 
         if verbose:
             if self.mas:
-                print(f'({lon/self.mas_per_degree}, {lat/self.mas_per_degree}) -> {qid}')
+                print(f'({lon}, {lat}) -> {qid}')
                 centroid_lon = origin_lon_int/self.mas_per_degree
                 centroid_lat = origin_lat_int/self.mas_per_degree
             else:
@@ -153,9 +153,9 @@ class QTree():
         Parameters
         ----------
         lons : ndarray
-            Array of longitudes in decimal degrees or milliarcseconds.
+            Array of longitudes in decimal degrees.
         lats : ndarray
-            Array of latitudes in decimal degrees or milliarcseconds.
+            Array of latitudes in decimal degrees.
 
         Returns
         -------
@@ -168,10 +168,10 @@ class QTree():
             lons_int = np.ceil(lons/self.res).astype(np.int64)
             lats_int = np.ceil(lats/self.res).astype(np.int64)
             shift = 1 << self.i_max
-        # Ensure lons and lats in milliarcseconds are integers
+        # Convert lons and lats to milliarcseconds
         else:
-            lons_int = lons.astype(np.int64)
-            lats_int = lats.astype(np.int64)
+            lons_int = np.round(lons*self.mas_per_degree).astype(np.int64)
+            lats_int = np.round(lats*self.mas_per_degree).astype(np.int64)
             shift = self.res_mas << self.i_max
 
         # Initialise qid array, origins and shift
@@ -204,7 +204,6 @@ class QTree():
             qids[mask3] = qids[mask3] + 3*delta
             origin_lons_int[mask3] += shift
             origin_lats_int[mask3] -= shift
-
         return qids
 
     def qids2lls(self, qids):
